@@ -1,0 +1,13 @@
+Author: Łukasz Mitka, luk.mitka@gmail.com
+
+Project was built with:
+	Eclipse Java EE IDE for Web Developers.
+
+	Version: Kepler Service Release 2
+	Build id: 20140224-0627
+
+To run service you need servlet container like Tomcat, in project was use Tomcat v7.0.
+
+You can run this application on HTTP server with servlet container, or for developping run under Eclipse.
+Import project into Eclipse, right click on project name, choose "Run As" -> "Run on Server", in the window select "Manually define new server" and choose "Apache"-> "Tomcat v7.0".
+Eclipse will download necessary files, install Tomcat and run application.
