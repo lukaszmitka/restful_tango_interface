@@ -552,6 +552,7 @@ public class ArgParser {
 
 	/**
 	 * Returns the width of the last parse image.
+	 * @return width of an image
 	 */
 	public int get_image_width() {
 		return width;
@@ -559,6 +560,7 @@ public class ArgParser {
 
 	/**
 	 * Returns the height of the last parse image.
+	 * @return height of an image
 	 */
 	public int get_image_height() {
 		return height;

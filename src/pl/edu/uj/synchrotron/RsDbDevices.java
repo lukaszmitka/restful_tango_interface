@@ -29,6 +29,7 @@ import fr.esrf.Tango.TimeVal;
 import fr.esrf.TangoApi.ApiUtil;
 import fr.esrf.TangoApi.AttributeInfo;
 import fr.esrf.TangoApi.CommandInfo;
+import fr.esrf.TangoApi.CommunicationFailed;
 import fr.esrf.TangoApi.Database;
 import fr.esrf.TangoApi.DbDatum;
 import fr.esrf.TangoApi.DeviceAttribute;
@@ -47,15 +48,16 @@ import fr.esrf.TangoDs.TangoConst;
 public class RsDbDevices implements TangoConst {
 	private DeviceProxy	device;
 	String					devices[];
-	// String host = "192.168.1.6";
-	String					host	= "192.168.130.100";
-	String					port	= "10000";
+	// below is Tango database address and port, they are set from environment variable TANGO_HOST
+	String					host;
+	String					port;
 
 	@GET
 	// @Path("/Device")
 	@Produces(MediaType.TEXT_HTML)
 	public String devicesHtmlDefaulAction() {
 		String retStr = "<html><title>Device</title><body><h1>Device list:</h1>";
+		getHostFromEnv();
 		try {
 			System.out.println("Connecting to database at: " + host + ":" + port);
 			Database db = ApiUtil.get_db_obj(host, port);
@@ -75,6 +77,7 @@ public class RsDbDevices implements TangoConst {
 	@Path("/Device.json")
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response devicesJsonDefaultAction() {
+		getHostFromEnv();
 		JSONObject retJSONObject = new JSONObject();
 		try {
 			try {
@@ -90,7 +93,6 @@ public class RsDbDevices implements TangoConst {
 				}
 			} catch (DevFailed e) {
 				retJSONObject.put("connectionStatus", "Unable to connect with device");
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		} catch (JSONException e) {
@@ -215,7 +217,6 @@ public class RsDbDevices implements TangoConst {
 				}
 			} catch (DevFailed e) {
 				retJSONObject.put("connectionStatus", "Unable to connect with device");
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		} catch (JSONException e) {
@@ -333,8 +334,8 @@ public class RsDbDevices implements TangoConst {
 						retJSONObject.put("connectionStatus", "OK");
 						System.out.println("Set source DEVICE");
 						break;
-						default:
-							retJSONObject.put("connectionStatus", "Error! Unknown command");
+					default:
+						retJSONObject.put("connectionStatus", "Error! Unknown command");
 				}
 			} catch (DevFailed e) {
 				retJSONObject.put("connectionStatus", "Unable to connect with device");
@@ -348,7 +349,6 @@ public class RsDbDevices implements TangoConst {
 		}
 		Response finalResponse = Response.ok(retJSONObject.toString(), MediaType.APPLICATION_JSON).build();
 		return finalResponse;
-		
 	}
 
 	@GET
@@ -362,18 +362,17 @@ public class RsDbDevices implements TangoConst {
 				System.out.println("Connecting to device");
 				DeviceProxy dp = new DeviceProxy(devDomain + "/" + devClass + "/" + devMember, host, port);
 				DevSource source = dp.get_source();
-				if(source.equals(DevSource.CACHE)){
-					retJSONObject.put("source",0);
+				if (source.equals(DevSource.CACHE)) {
+					retJSONObject.put("source", 0);
 				}
-				if(source.equals(DevSource.CACHE_DEV)){
-					retJSONObject.put("source",1);
+				if (source.equals(DevSource.CACHE_DEV)) {
+					retJSONObject.put("source", 1);
 				}
-				if(source.equals(DevSource.DEV)){
-					retJSONObject.put("source",2);
+				if (source.equals(DevSource.DEV)) {
+					retJSONObject.put("source", 2);
 				}
-				//System.out.println("Source: "+ source.toString());
-				
-				//System.out.println("Source value: "+ source.value());
+				// System.out.println("Source: "+ source.toString());
+				// System.out.println("Source value: "+ source.value());
 				retJSONObject.put("connectionStatus", "OK");
 			} catch (DevFailed e) {
 				retJSONObject.put("connectionStatus", "Unable to connect with device");
@@ -387,9 +386,8 @@ public class RsDbDevices implements TangoConst {
 		}
 		Response finalResponse = Response.ok(retJSONObject.toString(), MediaType.APPLICATION_JSON).build();
 		return finalResponse;
-		
 	}
-	
+
 	@GET
 	@Path("/Device/{domain}/{class}/{member}/get_device_info.json")
 	@Produces(MediaType.APPLICATION_JSON)
@@ -766,23 +764,40 @@ public class RsDbDevices implements TangoConst {
 				for (int i = 0; i < att_list.length; i++) {
 					// System.out.println("Add attribute data to reply");
 					retJSONObject.put("attribute" + i, att_list[i].toString());
-					DeviceAttribute da = dp.read_attribute(att_list[i]);
-					AttributeInfo ai = dp.get_attribute_info(att_list[i]);
-					if (ai.data_format.value() == AttrDataFormat._SCALAR) {
+					System.out.println("Getting attribute[" + i + "]: " + att_list[i]);
+					try {
+						DeviceAttribute da = dp.read_attribute(att_list[i]);
+						System.out.println("Getting attribute[" + i + "] info ");
+						AttributeInfo ai = dp.get_attribute_info(att_list[i]);
+						System.out.println("Getting attribute format");
+						if (ai.data_format.value() == AttrDataFormat._SCALAR) {
+							retJSONObject.put("attScalar" + i, true);
+						} else {
+							retJSONObject.put("attScalar" + i, false);
+						}
+						// System.out.println("Getting attribute value");
+						retJSONObject.put("attValue" + i, extractDataValue(da, ai));
+						// System.out.println("Getting attribute isWritable");
+						retJSONObject.put("attWritable" + i, isWritable(ai));
+						// System.out.println("Getting attribute isPlottable");
+						retJSONObject.put("attPlotable" + i, isPlotable(ai));
+						// System.out.println("Getting attribute description");
+						retJSONObject.put("attDesc" + i, "Name: " + ai.name + "\n" + "Label: " + ai.label + "\n"
+								+ "Writable: " + getWriteString(ai) + "\n" + "Data format: " + getFormatString(ai) + "\n"
+								+ "Data type: " + Tango_CmdArgTypeName[ai.data_type] + "\n" + "Max Dim X: " + ai.max_dim_x
+								+ "\n" + "Max Dim Y: " + ai.max_dim_y + "\n" + "Unit: " + ai.unit + "\n" + "Std Unit: "
+								+ ai.standard_unit + "\n" + "Disp Unit: " + ai.display_unit + "\n" + "Format: " + ai.format
+								+ "\n" + "Min value: " + ai.min_value + "\n" + "Max value: " + ai.max_value + "\n"
+								+ "Min alarm: " + ai.min_alarm + "\n" + "Max alarm: " + ai.max_alarm + "\n" + "Description: "
+								+ ai.description);
+					} catch (DevFailed e) {
+						System.out.println("Attribute is unreadable, cause: " + e.getMessage());
 						retJSONObject.put("attScalar" + i, true);
-					} else {
-						retJSONObject.put("attScalar" + i, false);
+						retJSONObject.put("attValue" + i, "Unreadable");
+						retJSONObject.put("attWritable" + i, false);
+						retJSONObject.put("attPlotable" + i, false);
+						retJSONObject.put("attDesc" + i, e.getMessage());
 					}
-					retJSONObject.put("attValue" + i, extractDataValue(da, ai));
-					retJSONObject.put("attWritable" + i, isWritable(ai));
-					retJSONObject.put("attPlotable" + i, isPlotable(ai));
-					retJSONObject.put("attDesc" + i, "Name: " + ai.name + "\n" + "Label: " + ai.label + "\n" + "Writable: "
-							+ getWriteString(ai) + "\n" + "Data format: " + getFormatString(ai) + "\n" + "Data type: "
-							+ Tango_CmdArgTypeName[ai.data_type] + "\n" + "Max Dim X: " + ai.max_dim_x + "\n" + "Max Dim Y: "
-							+ ai.max_dim_y + "\n" + "Unit: " + ai.unit + "\n" + "Std Unit: " + ai.standard_unit + "\n"
-							+ "Disp Unit: " + ai.display_unit + "\n" + "Format: " + ai.format + "\n" + "Min value: "
-							+ ai.min_value + "\n" + "Max value: " + ai.max_value + "\n" + "Min alarm: " + ai.min_alarm + "\n"
-							+ "Max alarm: " + ai.max_alarm + "\n" + "Description: " + ai.description);
 				}
 				retJSONObject.put("connectionStatus", "OK");
 			} catch (DevFailed e) {
@@ -849,11 +864,18 @@ public class RsDbDevices implements TangoConst {
 			try {
 				System.out.println("Connecting to device");
 				DeviceProxy dp = new DeviceProxy(devDomain + "/" + devClass + "/" + devMember, host, port);
-				DeviceAttribute da = dp.read_attribute(attName);
-				AttributeInfo ai = dp.get_attribute_info(attName);
-				retJSONObject.put("devName", dp.name());
-				retJSONObject.put("attName", ai.name);
-				retJSONObject.put("attValue", extractDataValues(da, ai));
+				try {
+					DeviceAttribute da = dp.read_attribute(attName);
+					AttributeInfo ai = dp.get_attribute_info(attName);
+					retJSONObject.put("devName", dp.name());
+					retJSONObject.put("attName", ai.name);
+					retJSONObject.put("attValue", extractDataValues(da, ai));
+				} catch (CommunicationFailed e) {
+					System.out.println("Attribute unreadable, cause: " + e.getMessage());
+					retJSONObject.put("devName", dp.name());
+					retJSONObject.put("attName", attName);
+					retJSONObject.put("attValue", "Attribute unreadable, cause: " + e.getMessage());
+				}
 				retJSONObject.put("connectionStatus", "OK");
 			} catch (DevFailed e) {
 				retJSONObject.put("connectionStatus", "Attribute " + attName + " not read. Unable to connect with device "
@@ -2445,5 +2467,23 @@ public class RsDbDevices implements TangoConst {
 				|| (ai.data_type == Tango_DEV_BOOLEAN))
 			return false;
 		return (ai.data_format.value() == AttrDataFormat._SPECTRUM) || (ai.data_format.value() == AttrDataFormat._IMAGE);
+	}
+
+	private void getHostFromEnv() {
+		String envName = "TANGO_HOST";
+		String value = System.getenv(envName);
+		if (value != null) {
+			System.out.format("%s=%s%n", envName, value);
+			String[] tangoHost = value.split(":");
+			if (tangoHost.length == 2) {
+				host = tangoHost[0];
+				port = tangoHost[1];
+				System.out.println("Using new host value: " + host + ":" + port);
+			} else {
+				System.out.println(envName + " not set correctly, should be in form: \"hostname:port\"");
+			}
+		} else {
+			System.out.format("%s not set. Using previously set host: %s:%s%n", envName, host, port);
+		}
 	}
 }
