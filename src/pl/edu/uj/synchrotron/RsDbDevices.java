@@ -3,7 +3,9 @@ package pl.edu.uj.synchrotron;
 import java.text.SimpleDateFormat;
 import java.util.TimeZone;
 
+import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -44,18 +46,17 @@ import fr.esrf.TangoDs.TangoConst;
 // text, XML and HTML.
 // The browser requests per default the HTML MIME type.
 // Sets the path to base URL + /Database
-@Path("/")
+@Path("/{host}:{port}")
 public class RsDbDevices implements TangoConst {
-	private DeviceProxy	device;
-	String					devices[];
-	// below is Tango database address and port, they are set from environment variable TANGO_HOST
-	String					host;
-	String					port;
+	// private DeviceProxy device;
+	String	devices[];
 
+	// below is Tango database address and port, they are set from environment variable TANGO_HOST
+	// String host; // = "192.168.0.19";
+	// String port; // = "10000";
 	@GET
-	// @Path("/Device")
 	@Produces(MediaType.TEXT_HTML)
-	public String devicesHtmlDefaulAction() {
+	public String devicesHtmlDefaulAction(@PathParam("host") String host, @PathParam("port") String port) {
 		String retStr = "<html><title>Device</title><body><h1>Device list:</h1>";
 		getHostFromEnv();
 		try {
@@ -76,21 +77,34 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Path("/Device.json")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response devicesJsonDefaultAction() {
-		getHostFromEnv();
+	public Response devicesJsonDefaultAction(@PathParam("host") String host, @PathParam("port") String port) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
 			try {
 				System.out.println("Connecting to database");
 				Database db;
+				DeviceProxy dp;
 				db = ApiUtil.get_db_obj(host, port);
 				System.out.println("Getting data from database");
 				devices = db.get_device_list("*");
-				retJSONObject.put("connectionStatus", "OK");
 				retJSONObject.put("numberOfDevices", devices.length);
+				long t0 = System.nanoTime();
 				for (int i = 0; i < devices.length; i++) {
 					retJSONObject.put("device" + i, devices[i]);
+					try{
+						dp = new DeviceProxy(devices[i],host,port);
+						dp.ping();
+						retJSONObject.put(devices[i] + "isDeviceAlive", true);
+						//System.out.println("Device "+classes[j]+"is alive");
+					} catch (DevFailed e){
+						e.printStackTrace();
+						retJSONObject.put(devices[i] + "isDeviceAlive", false);
+					}
 				}
+				retJSONObject.put("connectionStatus", "OK");
+				long t1 = System.nanoTime();
+				long time = (t1 - t0) / 1000000;
+				retJSONObject.put("Operation time", time);
 			} catch (DevFailed e) {
 				retJSONObject.put("connectionStatus", "Unable to connect with device");
 				e.printStackTrace();
@@ -99,22 +113,27 @@ public class RsDbDevices implements TangoConst {
 			System.out.println("Nie udało się zapisać danych");
 			e.printStackTrace();
 		}
+		// System.out.println("Header contain " + header.length() + " values");
 		Response finalResponse = Response.ok(retJSONObject.toString(), MediaType.APPLICATION_JSON).build();
-		return finalResponse;
+		return finalResponse;// */
 	}
 
 	@GET
 	@Path("/SortedDeviceList.json/{sorting_type}")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response devicesJsonSortedDeviceList(@PathParam("sorting_type") String sortType) {
+	public Response devicesJsonSortedDeviceList(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("sorting_type") String sortType) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
 			try {
 				System.out.println("Connecting to database");
 				Database db = ApiUtil.get_db_obj(host, port);
+				DeviceProxy dp;
 				int sType = Integer.parseInt(sortType);
+				long t0, t1, time;
 				switch (sType) {
 					case 1: // sort by class
+						t0 = System.nanoTime();
 						String classes[] = db.get_class_list("*");
 						// int device_count = 0;
 						retJSONObject.put("numberOfClasses", classes.length);
@@ -130,13 +149,27 @@ public class RsDbDevices implements TangoConst {
 							for (int j = 0; j < arg.svalue.length; j++) {
 								retJSONObject.put(classes[i] + "DevCount", arg.svalue.length);
 								retJSONObject.put(classes[i] + "Device" + j, arg.svalue[j]);
+								// checking if device is alive
+								try {
+									dp = new DeviceProxy(classes[i], host, port);
+									dp.ping();
+									retJSONObject.put(classes[i] + "isDeviceAlive" + j, true);
+									// System.out.println("Device "+classes[j]+"is alive");
+								} catch (DevFailed e) {
+									e.printStackTrace();
+									retJSONObject.put(classes[i] + "isDeviceAlive" + j, false);
+								}
 								// System.out.print("	Device[" + device_count + "]: " + arg.svalue[j]);
 								// device_count++;
 							}
 						}
 						retJSONObject.put("connectionStatus", "OK");
+						t1 = System.nanoTime();
+						time = (t1 - t0) / 1000000;
+						retJSONObject.put("Operation time", time);
 						break;
 					case 2: // sort by server
+						t0 = System.nanoTime();
 						System.out.println("Getting devices sorted by servers");
 						String servers[];
 						servers = db.get_server_name_list();
@@ -176,6 +209,14 @@ public class RsDbDevices implements TangoConst {
 											retJSONObject.put(devSub + l, devList[l]);
 											// System.out.println("					Device[" + device_count + "]: " + devList[l]);
 											// device_count++;
+											try {
+												dp = new DeviceProxy(devList[l], host, port);
+												dp.ping();
+												retJSONObject.put(devList[l] + "isDeviceAlive" + l, true);
+												// System.out.println("Device "+classes[j]+"is alive");
+											} catch (DevFailed e) {
+												retJSONObject.put(devList[l] + "isDeviceAlive" + l, false);
+											}
 										}
 									}
 								} else {
@@ -202,6 +243,15 @@ public class RsDbDevices implements TangoConst {
 												retJSONObject.put(devSub + l, devList[l]);
 												// System.out.println("					Device[" + device_count + "]: " + devList[l]);
 												// device_count++;
+												try {
+													dp = new DeviceProxy(devList[l], host, port);
+													dp.ping();
+													retJSONObject.put(devList[l] + "isDeviceAlive" + l, true);
+													// System.out.println("Device "+classes[j]+"is alive");
+												} catch (DevFailed e) {
+													e.printStackTrace();
+													retJSONObject.put(devList[l] + "isDeviceAlive" + l, false);
+												}
 											}
 										}
 									}
@@ -210,6 +260,90 @@ public class RsDbDevices implements TangoConst {
 						}
 						// System.out.println("Device count: " + device_count);
 						retJSONObject.put("connectionStatus", "OK");
+						t1 = System.nanoTime();
+						time = (t1 - t0) / 1000000;
+						retJSONObject.put("Operation time", time);
+						break;
+					case 3: // sort by devices
+						t0 = System.nanoTime();
+						System.out.println("Connecting to database");
+						// db = ApiUtil.get_db_obj(host, port);
+						System.out.println("Getting data from database");
+						devices = db.get_device_list("*");
+						retJSONObject.put("connectionStatus", "OK");
+						retJSONObject.put("numberOfDevices", devices.length);
+						String[] splitted = new String[3];
+						int i = devices.length - 1;
+						int domainCount = 0;
+						int classCount = 0;
+						int deviceCount = 0;
+						String devDomain = new String("");
+						String devClass = new String("");
+						int j = 0;
+						while (j < i) {
+							splitted = devices[j].split("/");
+							devDomain = splitted[0];
+							retJSONObject.put("domain" + domainCount, devDomain);
+							classCount = 0;
+							// DevClassList dcl = new DevClassList(devDomain);
+							// System.out.println("Petla 1 :" + devDomain + "  " + splitted[0]);
+							while (devDomain.equals(splitted[0]) && (j < i)) {
+								splitted = devices[j].split("/");
+								devClass = splitted[1];
+								// System.out.println("    Petla 2 :" + devClass + "  " + splitted[1]);
+								retJSONObject.put("domain" + domainCount + "class" + classCount, devClass);
+								// ArrayList<String> members = new ArrayList<String>();
+								deviceCount = 0;
+								while (devClass.equals(splitted[1]) && (j < i) && devDomain.equals(splitted[0])) {
+									// System.out.println("      Petla 3 :" + splitted[2]);
+									retJSONObject.put("domain" + domainCount + "class" + classCount + "device" + deviceCount,
+											devices[j]);
+									deviceCount++;
+									// System.out.println("Processing device: " + devDomain + "/" + devClass + "/" +
+									// splitted[2]);
+									try {
+										dp = new DeviceProxy(devices[j], host, port);
+										dp.ping();
+										retJSONObject.put(devices[j] + "isDeviceAlive", true);
+										// System.out.println("Device "+classes[j]+"is alive");
+									} catch (DevFailed e) {
+										e.printStackTrace();
+										retJSONObject.put(devices[j] + "isDeviceAlive", false);
+									}
+									j++;
+									if (j < i) {
+										splitted = devices[j].split("/");
+									} else {
+										break;
+									}
+								}
+								retJSONObject.put("domain" + domainCount + "class" + classCount + "devCount", deviceCount);
+								classCount++;
+							}
+							retJSONObject.put("domain" + domainCount + "classCount", classCount);
+							domainCount++;
+						}
+						retJSONObject.put("domainCount", domainCount);
+						retJSONObject.put("connectionStatus", "OK");
+						t1 = System.nanoTime();
+						time = (t1 - t0) / 1000000;
+						retJSONObject.put("Operation time", time);
+						/*long t0 = System.nanoTime();
+						for (int i = 0; i < devices.length; i++) {
+							retJSONObject.put("device" + i, devices[i]);
+							try {
+								dp = new DeviceProxy(devices[i], host, port);
+								dp.ping();
+								retJSONObject.put(devices[i] + "isDeviceAlive" + i, true);
+								// System.out.println("Device "+classes[j]+"is alive");
+							} catch (DevFailed e) {
+								e.printStackTrace();
+								retJSONObject.put(devices[i] + "isDeviceAlive" + i, false);
+							}
+						}
+						long t1 = System.nanoTime();
+						long time = (t1 - t0) / 1000000;
+						retJSONObject.put("Operation time", time);*/
 						break;
 					default:
 						retJSONObject.put("connectionStatus", "Unknown type of sorting!");
@@ -230,7 +364,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.TEXT_HTML)
 	@Path("/Device/{domain}/{class}/{member}")
-	public String deviceHtmlDefaultAction(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public String deviceHtmlDefaultAction(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember) {
 		String retStr = "<html><title>Device " + devDomain + "/" + devClass + "/" + devMember + "</title>"
 				+ "<body><h1>Device : " + devDomain + "/" + devClass + "/" + devMember + "</h1>";
@@ -260,7 +395,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Path("/Device/{domain}/{class}/{member}/get_info")
 	@Produces(MediaType.TEXT_HTML)
-	public String deviceHtmlGetInfo(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public String deviceHtmlGetInfo(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember) {
 		String retStr = "<html><title>Device " + devDomain + "/" + devClass + "/" + devMember + "</title>"
 				+ "<body><h1>Device : " + devDomain + "/" + devClass + "/" + devMember + "</h1>";
@@ -282,7 +418,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Path("/Device/{domain}/{class}/{member}/get_info.json")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response deviceJsonGetInfo(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonGetInfo(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
@@ -310,7 +447,8 @@ public class RsDbDevices implements TangoConst {
 	@PUT
 	@Path("/Device/{domain}/{class}/{member}/set_source.json/{source}")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response deviceJsonSetSource(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonSetSource(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("source") String source) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
@@ -354,7 +492,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Path("/Device/{domain}/{class}/{member}/get_source.json")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response deviceJsonGetSource(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonGetSource(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
@@ -391,7 +530,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Path("/Device/{domain}/{class}/{member}/get_device_info.json")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response deviceJsonGetDeviceInfo(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonGetDeviceInfo(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
@@ -429,7 +569,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Path("/Device/{domain}/{class}/{member}/ping_device.json")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response deviceJsonPingDevice(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonPingDevice(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
@@ -462,7 +603,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Path("/Device/{domain}/{class}/{member}/poll_status.json")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response deviceJsonPollStatus(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonPollStatus(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
@@ -504,7 +646,8 @@ public class RsDbDevices implements TangoConst {
 	@PUT
 	@Path("/Device/{domain}/{class}/{member}/restart.json")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response deviceJsonRestart(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonRestart(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
@@ -544,7 +687,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.TEXT_HTML)
 	@Path("/Device/{domain}/{class}/{member}/get_property_list")
-	public String deviceHtmlGetPropertyList(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public String deviceHtmlGetPropertyList(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember) {
 		String retStr = "<html><title>Device " + devDomain + "/" + devClass + "/" + devMember + "</title>"
 				+ "<body><h1>Device : " + devDomain + "/" + devClass + "/" + devMember + "</h1>";
@@ -565,8 +709,9 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/get_property_list.json")
-	public Response deviceJsonGetPropertyList(@PathParam("domain") String devDomain,
-			@PathParam("class") String devClass, @PathParam("member") String devMember) {
+	public Response deviceJsonGetPropertyList(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+			@PathParam("member") String devMember) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
 			try {
@@ -598,7 +743,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.TEXT_HTML)
 	@Path("/Device/{domain}/{class}/{member}/get_property/{prop_name}")
-	public String deviceGetProperty(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public String deviceGetProperty(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("prop_name") String propName) {
 		String retStr = "<html><title>Device " + devDomain + "/" + devClass + "/" + devMember + "</title>"
 				+ "<body><h1>Device : " + devDomain + "/" + devClass + "/" + devMember + "</h1>";
@@ -617,7 +763,8 @@ public class RsDbDevices implements TangoConst {
 	@PUT
 	@Produces(MediaType.TEXT_HTML)
 	@Path("/Device/{domain}/{class}/{member}/put_property/{prop_name}/{prop_value}")
-	public String deviceHtmlPutProperty(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public String deviceHtmlPutProperty(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("prop_name") String propName,
 			@PathParam("prop_value") String propValue) {
 		String retStr = "<html><title>Device " + devDomain + "/" + devClass + "/" + devMember + "</title>"
@@ -637,9 +784,9 @@ public class RsDbDevices implements TangoConst {
 	@PUT
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/set_timeout_milis.json/{timeout}")
-	public Response deviceJsonSetTimeoutMilis(@PathParam("domain") String devDomain,
-			@PathParam("class") String devClass, @PathParam("member") String devMember,
-			@PathParam("timeout") String timeout) {
+	public Response deviceJsonSetTimeoutMilis(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+			@PathParam("member") String devMember, @PathParam("timeout") String timeout) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
 			try {
@@ -665,7 +812,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/black_box.json/{nbCmd}")
-	public Response deviceJsonBlackBox(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonBlackBox(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("nbCmd") String nbCmd) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
@@ -675,7 +823,7 @@ public class RsDbDevices implements TangoConst {
 				long t0 = System.currentTimeMillis();
 				String[] out = dp.black_box(Integer.parseInt(nbCmd));
 				long t1 = System.currentTimeMillis();
-				String message = new String("Command: " + device.name() + "/BlackBox\n" + "Duration: " + (t1 - t0)
+				String message = new String("Command: " + dp.name() + "/BlackBox\n" + "Duration: " + (t1 - t0)
 						+ " msec\n\n");
 				for (int i = 0; i < out.length; i++) {
 					message = message + "[" + i + "]\t " + out[i] + "\n";
@@ -700,7 +848,8 @@ public class RsDbDevices implements TangoConst {
 	@PUT
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/put_property.json/{prop_name}/{prop_value}")
-	public Response deviceJsonPutProperty(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonPutProperty(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("prop_name") String propName,
 			@PathParam("prop_value") String propValue) {
 		JSONObject retJSONObject = new JSONObject();
@@ -729,7 +878,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.TEXT_HTML)
 	@Path("/Device/{domain}/{class}/{member}/get_attribute_list")
-	public String deviceHtmlGetAttributeList(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public String deviceHtmlGetAttributeList(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember) {
 		String retStr = "<html><title>Device " + devDomain + "/" + devClass + "/" + devMember + "</title>"
 				+ "<body><h1>Device : " + devDomain + "/" + devClass + "/" + devMember + "</h1>";
@@ -750,8 +900,9 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/get_attribute_list.json")
-	public Response deviceJsonGetAttributeList(@PathParam("domain") String devDomain,
-			@PathParam("class") String devClass, @PathParam("member") String devMember) {
+	public Response deviceJsonGetAttributeList(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+			@PathParam("member") String devMember) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
 			try {
@@ -818,7 +969,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.TEXT_HTML)
 	@Path("/Device/{domain}/{class}/{member}/read_attribute/{att_name}")
-	public String deviceReadAttribute(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public String deviceReadAttribute(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("att_name") String attName) {
 		String retStr = "<html><title>Device " + devDomain + "/" + devClass + "/" + devMember + "</title>"
 				+ "<body><h1>Device : " + devDomain + "/" + devClass + "/" + devMember + "</h1>";
@@ -857,7 +1009,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/read_attribute.json/{att_name}")
-	public Response deviceJsonReadAttribute(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonReadAttribute(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("att_name") String attName) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
@@ -895,7 +1048,8 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/plot_attribute.json/{att_name}")
-	public Response deviceJsonPlotAttribute(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonPlotAttribute(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("att_name") String attName) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
@@ -953,7 +1107,8 @@ public class RsDbDevices implements TangoConst {
 	@PUT
 	@Produces(MediaType.TEXT_HTML)
 	@Path("/Device/{domain}/{class}/{member}/write_attribute/{att_name}/{att_value}")
-	public String deviceHtmlWriteAttribute(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public String deviceHtmlWriteAttribute(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("att_name") String attName,
 			@PathParam("att_value") String attValue) {
 		String retStr = "<html><title>Device " + devDomain + "/" + devClass + "/" + devMember + "</title>"
@@ -977,7 +1132,8 @@ public class RsDbDevices implements TangoConst {
 	@PUT
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/write_attribute.json/{att_name}/{att_value}")
-	public Response deviceJsonWriteAttribute(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonWriteAttribute(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("att_name") String attName,
 			@PathParam("att_value") String attValue) {
 		JSONObject retJSONObject = new JSONObject();
@@ -1008,8 +1164,9 @@ public class RsDbDevices implements TangoConst {
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/command_list_query.json")
-	public Response deviceJsonCommandListQuery(@PathParam("domain") String devDomain,
-			@PathParam("class") String devClass, @PathParam("member") String devMember) {
+	public Response deviceJsonCommandListQuery(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+			@PathParam("member") String devMember) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
 			try {
@@ -1043,7 +1200,8 @@ public class RsDbDevices implements TangoConst {
 	@PUT
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/command_inout.json/{commandName}/{argin}")
-	public Response deviceJsonCommandInOut(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonCommandInOut(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("commandName") String commandName,
 			@PathParam("argin") String inputArgument) {
 		JSONObject retJSONObject = new JSONObject();
@@ -1096,7 +1254,8 @@ public class RsDbDevices implements TangoConst {
 	@PUT
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/extract_plot_data.json/{commandName}/{argin}")
-	public Response deviceJsonCommandPlot(@PathParam("domain") String devDomain, @PathParam("class") String devClass,
+	public Response deviceJsonCommandPlot(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("domain") String devDomain, @PathParam("class") String devClass,
 			@PathParam("member") String devMember, @PathParam("commandName") String commandName,
 			@PathParam("argin") String inputArgument) {
 		JSONObject retJSONObject = new JSONObject();
@@ -1357,14 +1516,14 @@ public class RsDbDevices implements TangoConst {
 	// -----------------------------------------------------
 	// Private stuff
 	// -----------------------------------------------------
-	/**
+	/*/**
 	 * Get alphabetically sorted list of attributes.
 	 * 
 	 * @return Array of attributes.
 	 * @throws DevFailed
 	 *            When device is uninitialized or there was problem with connection.
 	 */
-	private AttributeInfo[] getAttributeList() throws DevFailed {
+	/*private AttributeInfo[] getAttributeList() throws DevFailed {
 		int i, j;
 		boolean end;
 		AttributeInfo tmp;
@@ -1385,8 +1544,7 @@ public class RsDbDevices implements TangoConst {
 			j--;
 		}
 		return lst;
-	}
-
+	}*/
 	/**
 	 * Check whether attribute could be read, written or both.
 	 * 
@@ -2470,7 +2628,7 @@ public class RsDbDevices implements TangoConst {
 	}
 
 	private void getHostFromEnv() {
-		String envName = "TANGO_HOST";
+		/*String envName = "TANGO_HOST";
 		String value = System.getenv(envName);
 		if (value != null) {
 			System.out.format("%s=%s%n", envName, value);
@@ -2484,6 +2642,7 @@ public class RsDbDevices implements TangoConst {
 			}
 		} else {
 			System.out.format("%s not set. Using previously set host: %s:%s%n", envName, host, port);
-		}
+		
+		}*/
 	}
 }
