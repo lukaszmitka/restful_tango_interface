@@ -90,15 +90,15 @@ public class RsDbDevices implements TangoConst {
 				retJSONObject.put("numberOfDevices", devices.length);
 				long t0 = System.nanoTime();
 				for (int i = 0; i < devices.length; i++) {
-					retJSONObject.put("device" + i, devices[i]);
+					retJSONObject.put("device" + i, devices[i].toUpperCase());
 					try{
-						dp = new DeviceProxy(devices[i],host,port);
+						dp = new DeviceProxy(devices[i].toUpperCase(),host,port);
 						dp.ping();
-						retJSONObject.put(devices[i] + "isDeviceAlive", true);
+						retJSONObject.put(devices[i].toUpperCase() + "isDeviceAlive", true);
 						//System.out.println("Device "+classes[j]+"is alive");
 					} catch (DevFailed e){
 						e.printStackTrace();
-						retJSONObject.put(devices[i] + "isDeviceAlive", false);
+						retJSONObject.put(devices[i].toUpperCase() + "isDeviceAlive", false);
 					}
 				}
 				retJSONObject.put("connectionStatus", "OK");
@@ -148,7 +148,7 @@ public class RsDbDevices implements TangoConst {
 							DevVarLongStringArray arg = argout.extractLongStringArray();
 							for (int j = 0; j < arg.svalue.length; j++) {
 								retJSONObject.put(classes[i] + "DevCount", arg.svalue.length);
-								retJSONObject.put(classes[i] + "Device" + j, arg.svalue[j]);
+								retJSONObject.put(classes[i] + "Device" + j, arg.svalue[j].toUpperCase());
 								// checking if device is alive
 								try {
 									dp = new DeviceProxy(classes[i], host, port);
@@ -206,7 +206,7 @@ public class RsDbDevices implements TangoConst {
 										// prepare string for naming devices
 										devSub = classSub + k + "Dev";
 										for (int l = 0; l < devList.length; l++) {
-											retJSONObject.put(devSub + l, devList[l]);
+											retJSONObject.put(devSub + l, devList[l].toUpperCase());
 											// System.out.println("					Device[" + device_count + "]: " + devList[l]);
 											// device_count++;
 											try {
@@ -240,7 +240,7 @@ public class RsDbDevices implements TangoConst {
 											retJSONObject.put(classSub + k + "DCnt", devList.length);
 											devSub = classSub + k + "Dev";
 											for (int l = 0; l < devList.length; l++) {
-												retJSONObject.put(devSub + l, devList[l]);
+												retJSONObject.put(devSub + l, devList[l].toUpperCase());
 												// System.out.println("					Device[" + device_count + "]: " + devList[l]);
 												// device_count++;
 												try {
@@ -281,14 +281,14 @@ public class RsDbDevices implements TangoConst {
 						String devClass = new String("");
 						int j = 0;
 						while (j < i) {
-							splitted = devices[j].split("/");
+							splitted = devices[j].toUpperCase().split("/");
 							devDomain = splitted[0];
 							retJSONObject.put("domain" + domainCount, devDomain);
 							classCount = 0;
 							// DevClassList dcl = new DevClassList(devDomain);
 							// System.out.println("Petla 1 :" + devDomain + "  " + splitted[0]);
 							while (devDomain.equals(splitted[0]) && (j < i)) {
-								splitted = devices[j].split("/");
+								splitted = devices[j].toUpperCase().split("/");
 								devClass = splitted[1];
 								// System.out.println("    Petla 2 :" + devClass + "  " + splitted[1]);
 								retJSONObject.put("domain" + domainCount + "class" + classCount, devClass);
@@ -297,22 +297,22 @@ public class RsDbDevices implements TangoConst {
 								while (devClass.equals(splitted[1]) && (j < i) && devDomain.equals(splitted[0])) {
 									// System.out.println("      Petla 3 :" + splitted[2]);
 									retJSONObject.put("domain" + domainCount + "class" + classCount + "device" + deviceCount,
-											devices[j]);
+											devices[j].toUpperCase());
 									deviceCount++;
 									// System.out.println("Processing device: " + devDomain + "/" + devClass + "/" +
 									// splitted[2]);
 									try {
-										dp = new DeviceProxy(devices[j], host, port);
+										dp = new DeviceProxy(devices[j].toUpperCase(), host, port);
 										dp.ping();
-										retJSONObject.put(devices[j] + "isDeviceAlive", true);
+										retJSONObject.put(devices[j].toUpperCase() + "isDeviceAlive", true);
 										// System.out.println("Device "+classes[j]+"is alive");
 									} catch (DevFailed e) {
 										e.printStackTrace();
-										retJSONObject.put(devices[j] + "isDeviceAlive", false);
+										retJSONObject.put(devices[j].toUpperCase() + "isDeviceAlive", false);
 									}
 									j++;
 									if (j < i) {
-										splitted = devices[j].split("/");
+										splitted = devices[j].toUpperCase().split("/");
 									} else {
 										break;
 									}
