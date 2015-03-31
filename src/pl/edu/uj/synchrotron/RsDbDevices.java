@@ -5,7 +5,6 @@ import java.util.TimeZone;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
-import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -75,9 +74,10 @@ public class RsDbDevices implements TangoConst {
 	}
 
 	@GET
-	@Path("/Device.json")
+	@Path("/Device.json/{trackStatus}")
 	@Produces(MediaType.APPLICATION_JSON)
-	public Response devicesJsonDefaultAction(@PathParam("host") String host, @PathParam("port") String port) {
+	public Response devicesJsonDefaultAction(@PathParam("host") String host, @PathParam("port") String port,
+			@PathParam("trackStatus") boolean trackStatus) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
 			try {
@@ -91,14 +91,16 @@ public class RsDbDevices implements TangoConst {
 				long t0 = System.nanoTime();
 				for (int i = 0; i < devices.length; i++) {
 					retJSONObject.put("device" + i, devices[i].toUpperCase());
-					try{
-						dp = new DeviceProxy(devices[i].toUpperCase(),host,port);
-						dp.ping();
-						retJSONObject.put(devices[i].toUpperCase() + "isDeviceAlive", true);
-						//System.out.println("Device "+classes[j]+"is alive");
-					} catch (DevFailed e){
-						e.printStackTrace();
-						retJSONObject.put(devices[i].toUpperCase() + "isDeviceAlive", false);
+					if (trackStatus) {
+						try {
+							dp = new DeviceProxy(devices[i].toUpperCase(), host, port);
+							dp.ping();
+							retJSONObject.put(devices[i].toUpperCase() + "isDeviceAlive", true);
+							// System.out.println("Device "+classes[j]+"is alive");
+						} catch (DevFailed e) {
+							e.printStackTrace();
+							retJSONObject.put(devices[i].toUpperCase() + "isDeviceAlive", false);
+						}
 					}
 				}
 				retJSONObject.put("connectionStatus", "OK");
@@ -119,10 +121,10 @@ public class RsDbDevices implements TangoConst {
 	}
 
 	@GET
-	@Path("/SortedDeviceList.json/{sorting_type}")
+	@Path("/SortedDeviceList.json/{sorting_type}/{trackStatus}")
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response devicesJsonSortedDeviceList(@PathParam("host") String host, @PathParam("port") String port,
-			@PathParam("sorting_type") String sortType) {
+			@PathParam("sorting_type") String sortType, @PathParam("trackStatus") boolean trackStatus) {
 		JSONObject retJSONObject = new JSONObject();
 		try {
 			try {
@@ -150,14 +152,16 @@ public class RsDbDevices implements TangoConst {
 								retJSONObject.put(classes[i] + "DevCount", arg.svalue.length);
 								retJSONObject.put(classes[i] + "Device" + j, arg.svalue[j].toUpperCase());
 								// checking if device is alive
-								try {
-									dp = new DeviceProxy(classes[i], host, port);
-									dp.ping();
-									retJSONObject.put(classes[i] + "isDeviceAlive" + j, true);
-									// System.out.println("Device "+classes[j]+"is alive");
-								} catch (DevFailed e) {
-									e.printStackTrace();
-									retJSONObject.put(classes[i] + "isDeviceAlive" + j, false);
+								if (trackStatus) {
+									try {
+										dp = new DeviceProxy(arg.svalue[j], host, port);
+										dp.ping();
+										retJSONObject.put(classes[i] + "isDeviceAlive" + j, true);
+										// System.out.println("Device "+classes[j]+"is alive");
+									} catch (DevFailed e) {
+										e.printStackTrace();
+										retJSONObject.put(classes[i] + "isDeviceAlive" + j, false);
+									}
 								}
 								// System.out.print("	Device[" + device_count + "]: " + arg.svalue[j]);
 								// device_count++;
@@ -209,13 +213,15 @@ public class RsDbDevices implements TangoConst {
 											retJSONObject.put(devSub + l, devList[l].toUpperCase());
 											// System.out.println("					Device[" + device_count + "]: " + devList[l]);
 											// device_count++;
-											try {
-												dp = new DeviceProxy(devList[l], host, port);
-												dp.ping();
-												retJSONObject.put(devList[l] + "isDeviceAlive" + l, true);
-												// System.out.println("Device "+classes[j]+"is alive");
-											} catch (DevFailed e) {
-												retJSONObject.put(devList[l] + "isDeviceAlive" + l, false);
+											if (trackStatus) {
+												try {
+													dp = new DeviceProxy(devList[l], host, port);
+													dp.ping();
+													retJSONObject.put(devList[l] + "isDeviceAlive" + l, true);
+													// System.out.println("Device "+classes[j]+"is alive");
+												} catch (DevFailed e) {
+													retJSONObject.put(devList[l] + "isDeviceAlive" + l, false);
+												}
 											}
 										}
 									}
@@ -243,14 +249,16 @@ public class RsDbDevices implements TangoConst {
 												retJSONObject.put(devSub + l, devList[l].toUpperCase());
 												// System.out.println("					Device[" + device_count + "]: " + devList[l]);
 												// device_count++;
-												try {
-													dp = new DeviceProxy(devList[l], host, port);
-													dp.ping();
-													retJSONObject.put(devList[l] + "isDeviceAlive" + l, true);
-													// System.out.println("Device "+classes[j]+"is alive");
-												} catch (DevFailed e) {
-													e.printStackTrace();
-													retJSONObject.put(devList[l] + "isDeviceAlive" + l, false);
+												if (trackStatus) {
+													try {
+														dp = new DeviceProxy(devList[l], host, port);
+														dp.ping();
+														retJSONObject.put(devList[l] + "isDeviceAlive" + l, true);
+														// System.out.println("Device "+classes[j]+"is alive");
+													} catch (DevFailed e) {
+														e.printStackTrace();
+														retJSONObject.put(devList[l] + "isDeviceAlive" + l, false);
+													}
 												}
 											}
 										}
@@ -301,14 +309,16 @@ public class RsDbDevices implements TangoConst {
 									deviceCount++;
 									// System.out.println("Processing device: " + devDomain + "/" + devClass + "/" +
 									// splitted[2]);
-									try {
-										dp = new DeviceProxy(devices[j].toUpperCase(), host, port);
-										dp.ping();
-										retJSONObject.put(devices[j].toUpperCase() + "isDeviceAlive", true);
-										// System.out.println("Device "+classes[j]+"is alive");
-									} catch (DevFailed e) {
-										e.printStackTrace();
-										retJSONObject.put(devices[j].toUpperCase() + "isDeviceAlive", false);
+									if (trackStatus) {
+										try {
+											dp = new DeviceProxy(devices[j].toUpperCase(), host, port);
+											dp.ping();
+											retJSONObject.put(devices[j].toUpperCase() + "isDeviceAlive", true);
+											// System.out.println("Device "+classes[j]+"is alive");
+										} catch (DevFailed e) {
+											e.printStackTrace();
+											retJSONObject.put(devices[j].toUpperCase() + "isDeviceAlive", false);
+										}
 									}
 									j++;
 									if (j < i) {
@@ -1045,6 +1055,86 @@ public class RsDbDevices implements TangoConst {
 		return finalResponse;
 	}
 
+	@PUT
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Path("/Device/{domain}/{class}/{member}/read_attributes")
+	public Response deviceJsonReadAttributes(String request, @PathParam("host") String host,
+			@PathParam("port") String port, @PathParam("domain") String devDomain, @PathParam("class") String devClass,
+			@PathParam("member") String devMember) {
+		System.out.println("Received JSON request: " + request);
+		JSONObject JSONreq = null;
+		JSONObject retJSONObject = new JSONObject();
+		// String[] attList;
+		try {
+			JSONreq = new JSONObject(request);
+			if (JSONreq != null) {
+				if (JSONreq.has("attCount")) {
+					int attCount = JSONreq.getInt("attCount");
+					// attList = new String[attCount];
+					try {
+						System.out.println("Connecting to device");
+						DeviceProxy dp = new DeviceProxy(devDomain + "/" + devClass + "/" + devMember, host, port);
+						String attName = new String();
+						int attID;
+						for (int i = 0; i < attCount; i++) {
+							attName = JSONreq.getString("att" + i);
+							try {
+								DeviceAttribute da = dp.read_attribute(attName);
+								AttributeInfo ai = dp.get_attribute_info(attName);
+								retJSONObject.put("attValue" + i, extractDataValue(da, ai));
+								retJSONObject.put("attID" + i, JSONreq.getInt("attID" + i));
+							} catch (CommunicationFailed e) {
+								System.out.println("Attribute unreadable, cause: " + e.getMessage());
+								retJSONObject.put("att" + i, "Attribute read error");
+							}
+						}
+						retJSONObject.put("attCount", attCount);
+						retJSONObject.put("connectionStatus", "OK");
+					} catch (DevFailed e) {
+						retJSONObject.put("connectionStatus", "Unable to connect with device " + devDomain + "/" + devClass
+								+ "/" + devMember);
+						System.out.println("Problem occured while connecting with device: " + devDomain + "/" + devClass
+								+ "/" + devMember);
+						e.printStackTrace();
+					}
+				}
+			}
+		} catch (JSONException e1) {
+			e1.printStackTrace();
+		}
+		/*try {
+			try {
+				System.out.println("Connecting to device");
+				DeviceProxy dp = new DeviceProxy(devDomain + "/" + devClass + "/" + devMember, host, port);
+				try {
+					DeviceAttribute da = dp.read_attribute(attName);
+					AttributeInfo ai = dp.get_attribute_info(attName);
+					retJSONObject.put("devName", dp.name());
+					retJSONObject.put("attName", ai.name);
+					retJSONObject.put("attValue", extractDataValues(da, ai));
+				} catch (CommunicationFailed e) {
+					System.out.println("Attribute unreadable, cause: " + e.getMessage());
+					retJSONObject.put("devName", dp.name());
+					retJSONObject.put("attName", attName);
+					retJSONObject.put("attValue", "Attribute unreadable, cause: " + e.getMessage());
+				}
+				retJSONObject.put("connectionStatus", "OK");
+			} catch (DevFailed e) {
+				retJSONObject.put("connectionStatus", "Attribute " + attName + " not read. Unable to connect with device "
+						+ devDomain + "/" + devClass + "/" + devMember);
+				System.out.println("Problem occured while connecting with device: " + devDomain + "/" + devClass + "/"
+						+ devMember);
+				e.printStackTrace();
+			}
+		} catch (JSONException e) {
+			System.out.println("Nie udało się zapisać danych");
+			e.printStackTrace();
+		}*/
+		Response finalResponse = Response.ok(retJSONObject.toString(), MediaType.APPLICATION_JSON).build();
+		return finalResponse;
+	}
+
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/Device/{domain}/{class}/{member}/plot_attribute.json/{att_name}")
@@ -1224,6 +1314,8 @@ public class RsDbDevices implements TangoConst {
 				System.out.print("Duration: " + (t1 - t0) + " msec\n");
 				retJSONObject.put("replyHeader", "Command: " + dp.name() + "/" + commandName + "\nDuration: " + (t1 - t0)
 						+ " msec\n");
+				retJSONObject.put("commandOutType", Tango_CmdArgTypeName[ci.out_type]);
+				System.out.println("Command out type: " + Tango_CmdArgTypeName[ci.out_type]);
 				if (ci.out_type == Tango_DEV_VOID) {
 					System.out.println("Command OK");
 					retJSONObject.put("commandReply", "Command OK");
